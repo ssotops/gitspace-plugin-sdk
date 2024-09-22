@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package gitspace.plugin;
+
+option go_package = "github.com/ssotops/gitspace-plugin-sdk/proto";
+
+message PluginInfo {
+    string name = 1;
+    string version = 2;
+}
+
+service PluginService {
+    rpc GetPluginInfo(PluginInfoRequest) returns (PluginInfo) {}
+}
+
+message PluginInfoRequest {}
