@@ -194,7 +194,6 @@ add_local_module_replacement
 
 # Update go.mod with required dependencies
 log "Updating go.mod with required dependencies..."
-go get github.com/ssotops/gitspace-plugin-sdk/proto
 go get google.golang.org/protobuf
 go get google.golang.org/grpc
 if [ $? -eq 0 ]; then
@@ -246,6 +245,20 @@ if [ $? -eq 0 ]; then
     changes+=("Tests passed")
 else
     error "Some tests failed."
+    exit 1
+fi
+
+# Build example plugins
+log "Building example plugins..."
+(
+    cd examples
+    ./build.sh
+)
+if [ $? -eq 0 ]; then
+    success "Example plugins built successfully."
+    changes+=("Example plugins built")
+else
+    error "Failed to build example plugins."
     exit 1
 fi
 
