@@ -55,6 +55,59 @@ install_protoc() {
     fi
 }
 
+# Function to update proto file content
+update_proto_file() {
+    local proto_file="$1"
+    log "Updating $proto_file..."
+
+    # Update the file content
+    cat > "$proto_file" <<EOL
+syntax = "proto3";
+
+package gitspace.plugin;
+
+option go_package = "github.com/ssotops/gitspace-plugin-sdk/proto";
+
+message PluginInfo {
+    string name = 1;
+    string version = 2;
+}
+
+message PluginInfoRequest {}
+
+message CommandRequest {
+    string command = 1;
+    map<string, string> parameters = 2;
+}
+
+message CommandResponse {
+    bool success = 1;
+    string result = 2;
+    string error_message = 3;
+}
+
+message MenuRequest {}
+
+message MenuItem {
+    string label = 1;
+    string command = 2;
+}
+
+message MenuResponse {
+    repeated MenuItem items = 1;
+}
+
+service PluginService {
+    rpc GetPluginInfo(PluginInfoRequest) returns (PluginInfo) {}
+    rpc ExecuteCommand(CommandRequest) returns (CommandResponse) {}
+    rpc GetMenu(MenuRequest) returns (MenuResponse) {}
+}
+EOL
+
+    success "$proto_file updated successfully"
+    changes+=("Updated $proto_file")
+}
+
 # Check and install gum if necessary
 if ! command_exists gum; then
     echo "gum is not installed."
@@ -148,29 +201,15 @@ if [ ! -d "proto" ]; then
     changes+=("Proto directory created")
 fi
 
-# Check if there are any .proto files, if not, create a basic one
-if [ -z "$(find proto -maxdepth 1 -name '*.proto' -print -quit)" ]; then
-    log "No .proto files found. Creating a basic plugin.proto file..."
-    cat << EOF > proto/plugin.proto
-syntax = "proto3";
-
-package gitspace.plugin;
-
-option go_package = "github.com/ssotops/gitspace-plugin-sdk/proto";
-
-message PluginInfo {
-    string name = 1;
-    string version = 2;
-}
-
-service PluginService {
-    rpc GetPluginInfo(PluginInfoRequest) returns (PluginInfo) {}
-}
-
-message PluginInfoRequest {}
-EOF
-    success "Basic plugin.proto file created."
-    changes+=("Basic plugin.proto file created")
+# Check if plugin.proto exists, if not create it, otherwise update it
+proto_file="proto/plugin.proto"
+if [ ! -f "$proto_file" ]; then
+    log "No plugin.proto file found. Creating a new one..."
+    update_proto_file "$proto_file"
+    changes+=("Created new plugin.proto file")
+else
+    log "Existing plugin.proto file found. Updating..."
+    update_proto_file "$proto_file"
 fi
 
 # Ensure proto package is set up
@@ -194,7 +233,6 @@ add_local_module_replacement
 
 # Update go.mod with required dependencies
 log "Updating go.mod with required dependencies..."
-go get github.com/ssotops/gitspace-plugin-sdk/proto
 go get google.golang.org/protobuf
 go get google.golang.org/grpc
 if [ $? -eq 0 ]; then
@@ -246,6 +284,20 @@ if [ $? -eq 0 ]; then
     changes+=("Tests passed")
 else
     error "Some tests failed."
+    exit 1
+fi
+
+# Build example plugins
+log "Building example plugins..."
+(
+    cd examples
+    ./build.sh
+)
+if [ $? -eq 0 ]; then
+    success "Example plugins built successfully."
+    changes+=("Example plugins built")
+else
+    error "Failed to build example plugins."
     exit 1
 fi
 
