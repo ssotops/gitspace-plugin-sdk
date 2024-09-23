@@ -11,7 +11,9 @@ import (
 )
 
 type PluginHandler interface {
-	GetPluginInfo(req *pb.PluginInfoRequest) (*pb.PluginInfo, error)
+	GetPluginInfo(*pb.PluginInfoRequest) (*pb.PluginInfo, error)
+	ExecuteCommand(*pb.CommandRequest) (*pb.CommandResponse, error)
+	GetMenu(*pb.MenuRequest) (*pb.MenuResponse, error)
 }
 
 func RunPlugin(handler PluginHandler) {
@@ -97,4 +99,46 @@ func writeMessage(w io.Writer, msg proto.Message) error {
 
 	_, err = w.Write(msgData)
 	return err
+}
+
+func ReadMessage(r io.Reader) (uint32, proto.Message, error) {
+    var msgType [1]byte
+    _, err := r.Read(msgType[:])
+    if err != nil {
+        return 0, nil, err
+    }
+
+    var msg proto.Message
+    switch msgType[0] {
+    case 1:
+        msg = &pb.PluginInfoRequest{}
+    case 2:
+        msg = &pb.CommandRequest{}
+    case 3:
+        msg = &pb.MenuRequest{}
+    default:
+        return 0, nil, fmt.Errorf("unknown message type: %d", msgType[0])
+    }
+
+    data, err := io.ReadAll(r)
+    if err != nil {
+        return 0, nil, err
+    }
+
+    err = proto.Unmarshal(data, msg)
+    if err != nil {
+        return 0, nil, err
+    }
+
+    return uint32(msgType[0]), msg, nil
+}
+
+func WriteMessage(w io.Writer, msg proto.Message) error {
+    data, err := proto.Marshal(msg)
+    if err != nil {
+        return err
+    }
+
+    _, err = w.Write(data)
+    return err
 }

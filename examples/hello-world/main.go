@@ -2,16 +2,20 @@ package main
 
 import (
 	"fmt"
-	"strings"
+	"io"
+	"os"
 
-	"github.com/charmbracelet/huh"
+	// "github.com/charmbracelet/huh"
+	"github.com/charmbracelet/log"
 	"github.com/ssotops/gitspace-plugin-sdk/gsplug"
 	pb "github.com/ssotops/gitspace-plugin-sdk/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 type HelloWorldPlugin struct{}
 
 func (p *HelloWorldPlugin) GetPluginInfo(req *pb.PluginInfoRequest) (*pb.PluginInfo, error) {
+	log.Info("GetPluginInfo called")
 	return &pb.PluginInfo{
 		Name:    "Hello World Plugin",
 		Version: "1.0.0",
@@ -19,6 +23,7 @@ func (p *HelloWorldPlugin) GetPluginInfo(req *pb.PluginInfoRequest) (*pb.PluginI
 }
 
 func (p *HelloWorldPlugin) ExecuteCommand(req *pb.CommandRequest) (*pb.CommandResponse, error) {
+	log.Info("ExecuteCommand called", "command", req.Command)
 	switch req.Command {
 	case "greet":
 		return &pb.CommandResponse{
@@ -39,41 +44,8 @@ func (p *HelloWorldPlugin) ExecuteCommand(req *pb.CommandRequest) (*pb.CommandRe
 }
 
 func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error) {
-	var name, greeting string
-	var uppercase bool
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Enter your name").
-				Value(&name),
-			huh.NewSelect[string]().
-				Title("Choose a greeting").
-				Options(
-					huh.NewOption("Hello", "Hello"),
-					huh.NewOption("Hi", "Hi"),
-					huh.NewOption("Hey", "Hey"),
-				).
-				Value(&greeting),
-			huh.NewConfirm().
-				Title("Uppercase the greeting?").
-				Value(&uppercase),
-		),
-	)
-
-	err := form.Run()
-	if err != nil {
-		return &pb.MenuResponse{
-			Items: []*pb.MenuItem{
-				{Label: "Error", Command: "greet"},
-			},
-		}, nil
-	}
-
-	if uppercase {
-		greeting = strings.ToUpper(greeting)
-	}
-
+	log.Info("GetMenu called")
+	// For simplicity, let's return a static menu without user input
 	return &pb.MenuResponse{
 		Items: []*pb.MenuItem{
 			{Label: "Simple Greeting", Command: "greet"},
@@ -83,5 +55,50 @@ func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error
 }
 
 func main() {
-	gsplug.RunPlugin(&HelloWorldPlugin{})
+	logger := log.NewWithOptions(os.Stderr, log.Options{
+		ReportCaller:    true,
+		ReportTimestamp: true,
+		Level:           log.DebugLevel,
+	})
+	logger.Info("Hello World plugin starting")
+
+	plugin := &HelloWorldPlugin{}
+
+	for {
+		logger.Debug("Waiting for message")
+		msgType, msg, err := gsplug.ReadMessage(os.Stdin)
+		if err != nil {
+			if err == io.EOF {
+				logger.Info("Received EOF, exiting")
+				return
+			}
+			logger.Error("Error reading message", "error", err)
+			continue
+		}
+		logger.Debug("Received message", "type", msgType)
+
+		var response proto.Message
+		switch msgType {
+		case 1: // GetPluginInfo
+			response, err = plugin.GetPluginInfo(msg.(*pb.PluginInfoRequest))
+		case 2: // ExecuteCommand
+			response, err = plugin.ExecuteCommand(msg.(*pb.CommandRequest))
+		case 3: // GetMenu
+			response, err = plugin.GetMenu(msg.(*pb.MenuRequest))
+		default:
+			err = fmt.Errorf("unknown message type: %d", msgType)
+		}
+
+		if err != nil {
+			logger.Error("Error handling message", "error", err)
+			continue
+		}
+
+		logger.Debug("Sending response")
+		err = gsplug.WriteMessage(os.Stdout, response)
+		if err != nil {
+			logger.Error("Error writing response", "error", err)
+		}
+		logger.Debug("Response sent")
+	}
 }
