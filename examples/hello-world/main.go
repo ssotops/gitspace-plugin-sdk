@@ -1,11 +1,12 @@
 package main
 
 import (
+  "encoding/json"
 	"fmt"
 	"io"
 	"os"
 
-	// "github.com/charmbracelet/huh"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
 	"github.com/ssotops/gitspace-plugin-sdk/gsplug"
 	pb "github.com/ssotops/gitspace-plugin-sdk/proto"
@@ -45,12 +46,26 @@ func (p *HelloWorldPlugin) ExecuteCommand(req *pb.CommandRequest) (*pb.CommandRe
 
 func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error) {
 	log.Info("GetMenu called")
-	// For simplicity, let's return a static menu without user input
+
+	menu := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Choose a Hello World action").
+				Options(
+					huh.NewOption("Simple Greeting", "greet"),
+					huh.NewOption("Custom Greeting", "customize"),
+				),
+		),
+	)
+
+	// Serialize the menu to JSON
+	menuBytes, err := json.Marshal(menu)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal menu: %w", err)
+	}
+
 	return &pb.MenuResponse{
-		Items: []*pb.MenuItem{
-			{Label: "Simple Greeting", Command: "greet"},
-			{Label: "Custom Greeting", Command: "customize"},
-		},
+		MenuData: menuBytes,
 	}, nil
 }
 
