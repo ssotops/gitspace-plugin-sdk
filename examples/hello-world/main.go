@@ -15,10 +15,9 @@ import (
 type HelloWorldPlugin struct{}
 
 type MenuOption struct {
-    Label   string `json:"label"`
-    Command string `json:"command"`
+	Label   string `json:"label"`
+	Command string `json:"command"`
 }
-
 
 func (p *HelloWorldPlugin) GetPluginInfo(req *pb.PluginInfoRequest) (*pb.PluginInfo, error) {
 	log.Info("GetPluginInfo called")
@@ -65,6 +64,7 @@ func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error
 	}
 
 	log.Info("Menu marshalled successfully", "size", len(menuBytes))
+	log.Debug("Menu data", "raw", fmt.Sprintf("%x", menuBytes))
 
 	return &pb.MenuResponse{
 		MenuData: menuBytes,
@@ -111,10 +111,18 @@ func main() {
 			continue
 		}
 
-		logger.Debug("Sending response", "type", msgType, "content", fmt.Sprintf("%+v", response))
+		data, err := proto.Marshal(response)
+		if err != nil {
+			logger.Error("Failed to marshal response", "error", err)
+			continue
+		}
+
+		logger.Debug("Sending response", "type", msgType, "content", fmt.Sprintf("%+v", response), "rawBytes", fmt.Sprintf("%x", data))
 		err = gsplug.WriteMessage(os.Stdout, response)
 		if err != nil {
 			logger.Error("Error writing response", "error", err)
+		} else {
+			logger.Debug("WriteMessage completed without error")
 		}
 		logger.Debug("Response sent")
 

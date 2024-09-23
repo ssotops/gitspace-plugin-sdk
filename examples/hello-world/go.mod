@@ -4,7 +4,7 @@ go 1.23.1
 
 require (
 	github.com/charmbracelet/log v0.4.0
-	github.com/ssotops/gitspace-plugin-sdk v0.0.0-00010101000000-000000000000
+	github.com/ssotops/gitspace-plugin-sdk v0.0.0-20240923114730-3921de448c9c
 	google.golang.org/protobuf v1.34.2
 )
 

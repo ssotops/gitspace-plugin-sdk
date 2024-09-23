@@ -158,14 +158,17 @@ func WriteMessage(w io.Writer, msg proto.Message) error {
 		return fmt.Errorf("unknown message type: %T", msg)
 	}
 
+	fmt.Printf("DEBUG: Writing message type: %d\n", msgType)
 	if _, err := w.Write([]byte{msgType}); err != nil {
 		return fmt.Errorf("failed to write message type: %w", err)
 	}
 
+	fmt.Printf("DEBUG: Writing message length: %d\n", len(data))
 	if err := binary.Write(w, binary.LittleEndian, uint32(len(data))); err != nil {
 		return fmt.Errorf("failed to write message length: %w", err)
 	}
 
+	fmt.Printf("DEBUG: Writing message data: %x\n", data)
 	if _, err := w.Write(data); err != nil {
 		return fmt.Errorf("failed to write message data: %w", err)
 	}
