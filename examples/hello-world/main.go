@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/huh"
 	"github.com/ssotops/gitspace-plugin-sdk/gsplug"
@@ -12,6 +15,7 @@ import (
 type HelloWorldPlugin struct{}
 
 func (p *HelloWorldPlugin) GetPluginInfo(req *pb.PluginInfoRequest) (*pb.PluginInfo, error) {
+	log.Println("GetPluginInfo called")
 	return &pb.PluginInfo{
 		Name:    "Hello World Plugin",
 		Version: "1.0.0",
@@ -19,6 +23,7 @@ func (p *HelloWorldPlugin) GetPluginInfo(req *pb.PluginInfoRequest) (*pb.PluginI
 }
 
 func (p *HelloWorldPlugin) ExecuteCommand(req *pb.CommandRequest) (*pb.CommandResponse, error) {
+	log.Printf("ExecuteCommand called with command: %s", req.Command)
 	switch req.Command {
 	case "greet":
 		return &pb.CommandResponse{
@@ -39,6 +44,7 @@ func (p *HelloWorldPlugin) ExecuteCommand(req *pb.CommandRequest) (*pb.CommandRe
 }
 
 func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error) {
+	log.Println("GetMenu called")
 	var name, greeting string
 	var uppercase bool
 
@@ -63,6 +69,7 @@ func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error
 
 	err := form.Run()
 	if err != nil {
+		log.Printf("Form error: %v", err)
 		return &pb.MenuResponse{
 			Items: []*pb.MenuItem{
 				{Label: "Error", Command: "greet"},
@@ -83,5 +90,23 @@ func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error
 }
 
 func main() {
-	gsplug.RunPlugin(&HelloWorldPlugin{})
+	log.SetOutput(os.Stderr)
+	log.Println("Hello World plugin starting")
+
+	// Create a channel to signal when to exit
+	done := make(chan bool)
+
+	// Run the plugin in a goroutine
+	go func() {
+		gsplug.RunPlugin(&HelloWorldPlugin{})
+		done <- true
+	}()
+
+	// Wait for either input or timeout
+	select {
+	case <-done:
+		log.Println("Plugin exited")
+	case <-time.After(5 * time.Second):
+		log.Println("No input received after 5 seconds. Exiting.")
+	}
 }

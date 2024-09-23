@@ -11,7 +11,9 @@ import (
 )
 
 type PluginHandler interface {
-	GetPluginInfo(req *pb.PluginInfoRequest) (*pb.PluginInfo, error)
+	GetPluginInfo(*pb.PluginInfoRequest) (*pb.PluginInfo, error)
+	ExecuteCommand(*pb.CommandRequest) (*pb.CommandResponse, error)
+	GetMenu(*pb.MenuRequest) (*pb.MenuResponse, error)
 }
 
 func RunPlugin(handler PluginHandler) {
