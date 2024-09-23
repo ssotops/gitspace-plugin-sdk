@@ -102,43 +102,73 @@ func writeMessage(w io.Writer, msg proto.Message) error {
 }
 
 func ReadMessage(r io.Reader) (uint32, proto.Message, error) {
-    var msgType [1]byte
-    _, err := r.Read(msgType[:])
-    if err != nil {
-        return 0, nil, err
-    }
+	var msgType [1]byte
+	_, err := r.Read(msgType[:])
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to read message type: %w", err)
+	}
 
-    var msg proto.Message
-    switch msgType[0] {
-    case 1:
-        msg = &pb.PluginInfoRequest{}
-    case 2:
-        msg = &pb.CommandRequest{}
-    case 3:
-        msg = &pb.MenuRequest{}
-    default:
-        return 0, nil, fmt.Errorf("unknown message type: %d", msgType[0])
-    }
+	var msg proto.Message
+	switch msgType[0] {
+	case 1:
+		msg = &pb.PluginInfoRequest{}
+	case 2:
+		msg = &pb.CommandRequest{}
+	case 3:
+		msg = &pb.MenuRequest{}
+	default:
+		return 0, nil, fmt.Errorf("unknown message type: %d", msgType[0])
+	}
 
-    data, err := io.ReadAll(r)
-    if err != nil {
-        return 0, nil, err
-    }
+	var msgLen uint32
+	err = binary.Read(r, binary.LittleEndian, &msgLen)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to read message length: %w", err)
+	}
 
-    err = proto.Unmarshal(data, msg)
-    if err != nil {
-        return 0, nil, err
-    }
+	data := make([]byte, msgLen)
+	_, err = io.ReadFull(r, data)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to read message data: %w", err)
+	}
 
-    return uint32(msgType[0]), msg, nil
+	err = proto.Unmarshal(data, msg)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to unmarshal message: %w", err)
+	}
+
+	return uint32(msgType[0]), msg, nil
 }
 
 func WriteMessage(w io.Writer, msg proto.Message) error {
-    data, err := proto.Marshal(msg)
-    if err != nil {
-        return err
-    }
+	data, err := proto.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
 
-    _, err = w.Write(data)
-    return err
+	msgType := uint8(0)
+	switch msg.(type) {
+	case *pb.PluginInfo:
+		msgType = 1
+	case *pb.CommandResponse:
+		msgType = 2
+	case *pb.MenuResponse:
+		msgType = 3
+	default:
+		return fmt.Errorf("unknown message type: %T", msg)
+	}
+
+	if _, err := w.Write([]byte{msgType}); err != nil {
+		return fmt.Errorf("failed to write message type: %w", err)
+	}
+
+	if err := binary.Write(w, binary.LittleEndian, uint32(len(data))); err != nil {
+		return fmt.Errorf("failed to write message length: %w", err)
+	}
+
+	if _, err := w.Write(data); err != nil {
+		return fmt.Errorf("failed to write message data: %w", err)
+	}
+
+	return nil
 }
