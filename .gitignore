@@ -4,6 +4,7 @@ archive-*
 # Created by https://www.toptal.com/developers/gitignore/api/go,macos
 # Edit at https://www.toptal.com/developers/gitignore?templates=go,macos
 
+examples/hello-world/hello-world
 gitspace-plugin-sdk
 
 ### Go ###

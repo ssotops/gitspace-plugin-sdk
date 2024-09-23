@@ -94,7 +94,7 @@ message MenuItem {
 }
 
 message MenuResponse {
-    repeated MenuItem items = 1;
+    bytes menu_data = 1;
 }
 
 service PluginService {

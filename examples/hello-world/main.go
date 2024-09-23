@@ -1,11 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 
-	// "github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
 	"github.com/ssotops/gitspace-plugin-sdk/gsplug"
 	pb "github.com/ssotops/gitspace-plugin-sdk/proto"
@@ -13,6 +13,12 @@ import (
 )
 
 type HelloWorldPlugin struct{}
+
+type MenuOption struct {
+    Label   string `json:"label"`
+    Command string `json:"command"`
+}
+
 
 func (p *HelloWorldPlugin) GetPluginInfo(req *pb.PluginInfoRequest) (*pb.PluginInfo, error) {
 	log.Info("GetPluginInfo called")
@@ -45,12 +51,23 @@ func (p *HelloWorldPlugin) ExecuteCommand(req *pb.CommandRequest) (*pb.CommandRe
 
 func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error) {
 	log.Info("GetMenu called")
-	// For simplicity, let's return a static menu without user input
+
+	menuOptions := []MenuOption{
+		{Label: "Simple Greeting", Command: "greet"},
+		{Label: "Custom Greeting", Command: "customize"},
+	}
+
+	// Serialize the menu options to JSON
+	menuBytes, err := json.Marshal(menuOptions)
+	if err != nil {
+		log.Error("Failed to marshal menu", "error", err)
+		return nil, fmt.Errorf("failed to marshal menu: %w", err)
+	}
+
+	log.Info("Menu marshalled successfully", "size", len(menuBytes))
+
 	return &pb.MenuResponse{
-		Items: []*pb.MenuItem{
-			{Label: "Simple Greeting", Command: "greet"},
-			{Label: "Custom Greeting", Command: "customize"},
-		},
+		MenuData: menuBytes,
 	}, nil
 }
 
@@ -75,7 +92,7 @@ func main() {
 			logger.Error("Error reading message", "error", err)
 			continue
 		}
-		logger.Debug("Received message", "type", msgType)
+		logger.Debug("Received message", "type", msgType, "content", fmt.Sprintf("%+v", msg))
 
 		var response proto.Message
 		switch msgType {
@@ -94,11 +111,14 @@ func main() {
 			continue
 		}
 
-		logger.Debug("Sending response")
+		logger.Debug("Sending response", "type", msgType, "content", fmt.Sprintf("%+v", response))
 		err = gsplug.WriteMessage(os.Stdout, response)
 		if err != nil {
 			logger.Error("Error writing response", "error", err)
 		}
 		logger.Debug("Response sent")
+
+		// Flush stdout to ensure the message is sent immediately
+		os.Stdout.Sync()
 	}
 }
