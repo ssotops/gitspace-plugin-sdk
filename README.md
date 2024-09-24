@@ -63,7 +63,7 @@ entry_point = "Plugin"
 ## Example Plugin
 Here's a comprehensive example of a Hello World plugin implementation:
 
-```
+```go
 package main
 
 import (
@@ -267,7 +267,7 @@ gitspace
 ### Plugin Location
 
 Gitspace looks for plugins in the following directory:
-```
+```sh
 ~/.ssot/gitspace/plugins/
 ```
 
