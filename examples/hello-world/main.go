@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/charmbracelet/log"
 	"github.com/ssotops/gitspace-plugin-sdk/gsplug"
+	"github.com/ssotops/gitspace-plugin-sdk/logger"
 	pb "github.com/ssotops/gitspace-plugin-sdk/proto"
 	"google.golang.org/protobuf/proto"
 )
@@ -56,7 +58,6 @@ func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error
 		{Label: "Custom Greeting", Command: "customize"},
 	}
 
-	// Serialize the menu options to JSON
 	menuBytes, err := json.Marshal(menuOptions)
 	if err != nil {
 		log.Error("Failed to marshal menu", "error", err)
@@ -72,11 +73,13 @@ func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error
 }
 
 func main() {
-	logger := log.NewWithOptions(os.Stderr, log.Options{
-		ReportCaller:    true,
-		ReportTimestamp: true,
-		Level:           log.DebugLevel,
-	})
+	logDir := filepath.Join("logs", "hello-world")
+	logger, err := logger.NewRateLimitedLogger(logDir, "hello-world")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create logger: %v\n", err)
+		os.Exit(1)
+	}
+
 	logger.Info("Hello World plugin starting")
 
 	plugin := &HelloWorldPlugin{}
@@ -111,20 +114,13 @@ func main() {
 			continue
 		}
 
-		data, err := proto.Marshal(response)
-		if err != nil {
-			logger.Error("Failed to marshal response", "error", err)
-			continue
-		}
-
-		logger.Debug("Sending response", "type", msgType, "content", fmt.Sprintf("%+v", response), "rawBytes", fmt.Sprintf("%x", data))
+		logger.Debug("Sending response", "type", msgType, "content", fmt.Sprintf("%+v", response))
 		err = gsplug.WriteMessage(os.Stdout, response)
 		if err != nil {
 			logger.Error("Error writing response", "error", err)
 		} else {
-			logger.Debug("WriteMessage completed without error")
+			logger.Debug("Response sent successfully")
 		}
-		logger.Debug("Response sent")
 
 		// Flush stdout to ensure the message is sent immediately
 		os.Stdout.Sync()
