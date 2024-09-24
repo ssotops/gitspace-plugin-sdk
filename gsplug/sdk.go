@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/charmbracelet/log"
 	pb "github.com/ssotops/gitspace-plugin-sdk/proto"
 	"google.golang.org/protobuf/proto"
 )
@@ -107,6 +108,21 @@ func ReadMessage(r io.Reader) (uint32, proto.Message, error) {
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to read message type: %w", err)
 	}
+	log.Debug("Read message type", "type", msgType[0])
+
+	var msgLen uint32
+	err = binary.Read(r, binary.LittleEndian, &msgLen)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to read message length: %w", err)
+	}
+	log.Debug("Read message length", "length", msgLen)
+
+	data := make([]byte, msgLen)
+	_, err = io.ReadFull(r, data)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to read message data: %w", err)
+	}
+	log.Debug("Read message data", "dataLength", len(data), "rawData", fmt.Sprintf("%x", data))
 
 	var msg proto.Message
 	switch msgType[0] {
@@ -118,18 +134,6 @@ func ReadMessage(r io.Reader) (uint32, proto.Message, error) {
 		msg = &pb.MenuRequest{}
 	default:
 		return 0, nil, fmt.Errorf("unknown message type: %d", msgType[0])
-	}
-
-	var msgLen uint32
-	err = binary.Read(r, binary.LittleEndian, &msgLen)
-	if err != nil {
-		return 0, nil, fmt.Errorf("failed to read message length: %w", err)
-	}
-
-	data := make([]byte, msgLen)
-	_, err = io.ReadFull(r, data)
-	if err != nil {
-		return 0, nil, fmt.Errorf("failed to read message data: %w", err)
 	}
 
 	err = proto.Unmarshal(data, msg)
@@ -145,6 +149,7 @@ func WriteMessage(w io.Writer, msg proto.Message) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
+	log.Debug("Marshaled message", "dataLength", len(data), "rawData", fmt.Sprintf("%x", data))
 
 	msgType := uint8(0)
 	switch msg.(type) {
@@ -158,17 +163,22 @@ func WriteMessage(w io.Writer, msg proto.Message) error {
 		return fmt.Errorf("unknown message type: %T", msg)
 	}
 
+	log.Debug("Writing message type", "type", msgType)
 	if _, err := w.Write([]byte{msgType}); err != nil {
 		return fmt.Errorf("failed to write message type: %w", err)
 	}
 
+	log.Debug("Writing message length", "length", len(data))
 	if err := binary.Write(w, binary.LittleEndian, uint32(len(data))); err != nil {
 		return fmt.Errorf("failed to write message length: %w", err)
 	}
 
+	log.Debug("Writing message data", "dataLength", len(data))
 	if _, err := w.Write(data); err != nil {
 		return fmt.Errorf("failed to write message data: %w", err)
 	}
 
 	return nil
 }
+
+// ... (keep the existing readMessage and writeMessage functions)

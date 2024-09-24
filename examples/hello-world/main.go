@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/charmbracelet/log"
 	"github.com/ssotops/gitspace-plugin-sdk/gsplug"
+	"github.com/ssotops/gitspace-plugin-sdk/logger"
 	pb "github.com/ssotops/gitspace-plugin-sdk/proto"
 	"google.golang.org/protobuf/proto"
 )
@@ -15,10 +17,9 @@ import (
 type HelloWorldPlugin struct{}
 
 type MenuOption struct {
-    Label   string `json:"label"`
-    Command string `json:"command"`
+	Label   string `json:"label"`
+	Command string `json:"command"`
 }
-
 
 func (p *HelloWorldPlugin) GetPluginInfo(req *pb.PluginInfoRequest) (*pb.PluginInfo, error) {
 	log.Info("GetPluginInfo called")
@@ -57,7 +58,6 @@ func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error
 		{Label: "Custom Greeting", Command: "customize"},
 	}
 
-	// Serialize the menu options to JSON
 	menuBytes, err := json.Marshal(menuOptions)
 	if err != nil {
 		log.Error("Failed to marshal menu", "error", err)
@@ -65,6 +65,7 @@ func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error
 	}
 
 	log.Info("Menu marshalled successfully", "size", len(menuBytes))
+	log.Debug("Menu data", "raw", fmt.Sprintf("%x", menuBytes))
 
 	return &pb.MenuResponse{
 		MenuData: menuBytes,
@@ -72,11 +73,13 @@ func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error
 }
 
 func main() {
-	logger := log.NewWithOptions(os.Stderr, log.Options{
-		ReportCaller:    true,
-		ReportTimestamp: true,
-		Level:           log.DebugLevel,
-	})
+	logDir := filepath.Join("logs", "hello-world")
+	logger, err := logger.NewRateLimitedLogger(logDir, "hello-world")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create logger: %v\n", err)
+		os.Exit(1)
+	}
+
 	logger.Info("Hello World plugin starting")
 
 	plugin := &HelloWorldPlugin{}
@@ -115,8 +118,9 @@ func main() {
 		err = gsplug.WriteMessage(os.Stdout, response)
 		if err != nil {
 			logger.Error("Error writing response", "error", err)
+		} else {
+			logger.Debug("Response sent successfully")
 		}
-		logger.Debug("Response sent")
 
 		// Flush stdout to ensure the message is sent immediately
 		os.Stdout.Sync()
