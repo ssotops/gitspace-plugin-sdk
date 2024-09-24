@@ -17,6 +17,18 @@ type PluginHandler interface {
 	GetMenu(*pb.MenuRequest) (*pb.MenuResponse, error)
 }
 
+type MenuOption struct {
+	Label      string          `json:"label"`
+	Command    string          `json:"command"`
+	Parameters []ParameterInfo `json:"parameters,omitempty"`
+}
+
+type ParameterInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Required    bool   `json:"required"`
+}
+
 func RunPlugin(handler PluginHandler) {
 	for {
 		msgType, msg, err := readMessage(os.Stdin)
