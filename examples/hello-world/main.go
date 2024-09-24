@@ -16,11 +16,6 @@ import (
 
 type HelloWorldPlugin struct{}
 
-type MenuOption struct {
-	Label   string `json:"label"`
-	Command string `json:"command"`
-}
-
 func (p *HelloWorldPlugin) GetPluginInfo(req *pb.PluginInfoRequest) (*pb.PluginInfo, error) {
 	log.Info("GetPluginInfo called")
 	return &pb.PluginInfo{
@@ -30,17 +25,28 @@ func (p *HelloWorldPlugin) GetPluginInfo(req *pb.PluginInfoRequest) (*pb.PluginI
 }
 
 func (p *HelloWorldPlugin) ExecuteCommand(req *pb.CommandRequest) (*pb.CommandResponse, error) {
-	log.Info("ExecuteCommand called", "command", req.Command)
 	switch req.Command {
 	case "greet":
+		name := req.Parameters["name"]
+		if name == "" {
+			name = "World"
+		}
 		return &pb.CommandResponse{
 			Success: true,
-			Result:  fmt.Sprintf("Hello, %s!", req.Parameters["name"]),
+			Result:  fmt.Sprintf("Hello, %s!", name),
 		}, nil
 	case "customize":
+		greeting := req.Parameters["greeting"]
+		name := req.Parameters["name"]
+		if greeting == "" || name == "" {
+			return &pb.CommandResponse{
+				Success:      false,
+				ErrorMessage: "Missing greeting or name parameter",
+			}, nil
+		}
 		return &pb.CommandResponse{
 			Success: true,
-			Result:  fmt.Sprintf("%s, %s!", req.Parameters["greeting"], req.Parameters["name"]),
+			Result:  fmt.Sprintf("%s, %s!", greeting, name),
 		}, nil
 	default:
 		return &pb.CommandResponse{
@@ -51,21 +57,28 @@ func (p *HelloWorldPlugin) ExecuteCommand(req *pb.CommandRequest) (*pb.CommandRe
 }
 
 func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error) {
-	log.Info("GetMenu called")
-
-	menuOptions := []MenuOption{
-		{Label: "Simple Greeting", Command: "greet"},
-		{Label: "Custom Greeting", Command: "customize"},
+	menuOptions := []gsplug.MenuOption{
+		{
+			Label:   "Simple Greeting",
+			Command: "greet",
+			Parameters: []gsplug.ParameterInfo{
+				{Name: "name", Description: "Name to greet", Required: false},
+			},
+		},
+		{
+			Label:   "Custom Greeting",
+			Command: "customize",
+			Parameters: []gsplug.ParameterInfo{
+				{Name: "greeting", Description: "Custom greeting", Required: true},
+				{Name: "name", Description: "Name to greet", Required: true},
+			},
+		},
 	}
 
 	menuBytes, err := json.Marshal(menuOptions)
 	if err != nil {
-		log.Error("Failed to marshal menu", "error", err)
 		return nil, fmt.Errorf("failed to marshal menu: %w", err)
 	}
-
-	log.Info("Menu marshalled successfully", "size", len(menuBytes))
-	log.Debug("Menu data", "raw", fmt.Sprintf("%x", menuBytes))
 
 	return &pb.MenuResponse{
 		MenuData: menuBytes,
