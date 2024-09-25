@@ -35,9 +35,11 @@ type PluginHandler interface {
 ## Plugin Structure
 A typical plugin structure looks like this:
 
+```sh
 my-plugin/
 ├── main.go
 └── gitspace-plugin.toml
+```
 
 The `gitspace-plugin.toml` file should contain metadata about your plugin:
 
