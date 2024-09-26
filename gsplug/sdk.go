@@ -21,6 +21,7 @@ type MenuOption struct {
 	Label      string          `json:"label"`
 	Command    string          `json:"command"`
 	Parameters []ParameterInfo `json:"parameters,omitempty"`
+	SubMenu    []MenuOption    `json:"sub_menu,omitempty"`
 }
 
 type ParameterInfo struct {
@@ -192,5 +193,3 @@ func WriteMessage(w io.Writer, msg proto.Message) error {
 
 	return nil
 }
-
-// ... (keep the existing readMessage and writeMessage functions)
