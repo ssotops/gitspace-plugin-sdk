@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/charmbracelet/log"
 	pb "github.com/ssotops/gitspace-plugin-sdk/proto"
@@ -192,4 +193,12 @@ func WriteMessage(w io.Writer, msg proto.Message) error {
 	}
 
 	return nil
+}
+
+func GetPluginLogDir(pluginName string) (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get user home directory: %w", err)
+	}
+	return filepath.Join(homeDir, ".ssot", "gitspace", "logs", pluginName), nil
 }
