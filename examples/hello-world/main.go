@@ -5,19 +5,19 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
-	"github.com/charmbracelet/log"
 	"github.com/ssotops/gitspace-plugin-sdk/gsplug"
 	"github.com/ssotops/gitspace-plugin-sdk/logger"
 	pb "github.com/ssotops/gitspace-plugin-sdk/proto"
 	"google.golang.org/protobuf/proto"
 )
 
-type HelloWorldPlugin struct{}
+type HelloWorldPlugin struct {
+	logger *logger.RateLimitedLogger
+}
 
 func (p *HelloWorldPlugin) GetPluginInfo(req *pb.PluginInfoRequest) (*pb.PluginInfo, error) {
-	log.Info("GetPluginInfo called")
+	p.logger.Info("GetPluginInfo called")
 	return &pb.PluginInfo{
 		Name:    "Hello World Plugin",
 		Version: "1.0.0",
@@ -86,29 +86,30 @@ func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error
 }
 
 func main() {
-	logDir := filepath.Join("logs", "hello-world")
-	logger, err := logger.NewRateLimitedLogger(logDir, "hello-world")
+	pluginLogger, err := logger.NewRateLimitedLogger("hello-world")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create logger: %v\n", err)
 		os.Exit(1)
 	}
 
-	logger.Info("Hello World plugin starting")
+	pluginLogger.Info("Hello World plugin starting")
 
-	plugin := &HelloWorldPlugin{}
+	plugin := &HelloWorldPlugin{
+		logger: pluginLogger,
+	}
 
 	for {
-		logger.Debug("Waiting for message")
+		pluginLogger.Debug("Waiting for message")
 		msgType, msg, err := gsplug.ReadMessage(os.Stdin)
 		if err != nil {
 			if err == io.EOF {
-				logger.Info("Received EOF, exiting")
+				pluginLogger.Info("Received EOF, exiting")
 				return
 			}
-			logger.Error("Error reading message", "error", err)
+			pluginLogger.Error("Error reading message", "error", err)
 			continue
 		}
-		logger.Debug("Received message", "type", msgType, "content", fmt.Sprintf("%+v", msg))
+		pluginLogger.Debug("Received message", "type", msgType, "content", fmt.Sprintf("%+v", msg))
 
 		var response proto.Message
 		switch msgType {
@@ -123,16 +124,16 @@ func main() {
 		}
 
 		if err != nil {
-			logger.Error("Error handling message", "error", err)
+			pluginLogger.Error("Error handling message", "error", err)
 			continue
 		}
 
-		logger.Debug("Sending response", "type", msgType, "content", fmt.Sprintf("%+v", response))
+		pluginLogger.Debug("Sending response", "type", msgType, "content", fmt.Sprintf("%+v", response))
 		err = gsplug.WriteMessage(os.Stdout, response)
 		if err != nil {
-			logger.Error("Error writing response", "error", err)
+			pluginLogger.Error("Error writing response", "error", err)
 		} else {
-			logger.Debug("Response sent successfully")
+			pluginLogger.Debug("Response sent successfully")
 		}
 
 		// Flush stdout to ensure the message is sent immediately
