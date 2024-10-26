@@ -20,6 +20,7 @@ message CommandResponse {
     bool success = 1;
     string result = 2;
     string error_message = 3;
+    NavigationContext navigation = 4;
 }
 
 message MenuRequest {}
@@ -27,10 +28,24 @@ message MenuRequest {}
 message MenuItem {
     string label = 1;
     string command = 2;
+    string submenu_id = 3;
+    repeated ParameterInfo parameters = 4;
 }
 
 message MenuResponse {
     bytes menu_data = 1;
+}
+
+message NavigationContext {
+    string current_menu = 1;
+    string parent_menu = 2;
+    repeated MenuItem available_commands = 3;
+}
+
+message ParameterInfo {
+    string name = 1;
+    string description = 2;
+    bool required = 3;
 }
 
 service PluginService {
