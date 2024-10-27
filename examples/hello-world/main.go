@@ -1,11 +1,18 @@
+// gitspace-plugin-sdk/examples/hello-world/main.go
+
 package main
 
 import (
-	"encoding/json"
+	"bufio"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
+	"github.com/charmbracelet/log"
 	"github.com/ssotops/gitspace-plugin-sdk/gsplug"
 	"github.com/ssotops/gitspace-plugin-sdk/logger"
 	pb "github.com/ssotops/gitspace-plugin-sdk/proto"
@@ -25,6 +32,8 @@ func (p *HelloWorldPlugin) GetPluginInfo(req *pb.PluginInfoRequest) (*pb.PluginI
 }
 
 func (p *HelloWorldPlugin) ExecuteCommand(req *pb.CommandRequest) (*pb.CommandResponse, error) {
+	p.logger.Debug("ExecuteCommand called", "command", req.Command, "params", req.Parameters)
+
 	switch req.Command {
 	case "greet":
 		name := req.Parameters["name"]
@@ -51,12 +60,14 @@ func (p *HelloWorldPlugin) ExecuteCommand(req *pb.CommandRequest) (*pb.CommandRe
 	default:
 		return &pb.CommandResponse{
 			Success:      false,
-			ErrorMessage: "Unknown command",
+			ErrorMessage: fmt.Sprintf("Unknown command: %s", req.Command),
 		}, nil
 	}
 }
 
 func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error) {
+	p.logger.Debug("GetMenu called")
+
 	menuOptions := []gsplug.MenuOption{
 		{
 			Label:   "Simple Greeting",
@@ -75,7 +86,9 @@ func (p *HelloWorldPlugin) GetMenu(req *pb.MenuRequest) (*pb.MenuResponse, error
 		},
 	}
 
-	menuBytes, err := json.Marshal(menuOptions)
+	menuBytes, err := proto.Marshal(&pb.MenuResponse{
+		MenuData: []byte(fmt.Sprintf("%+v", menuOptions)),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal menu: %w", err)
 	}
@@ -91,52 +104,173 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Failed to create logger: %v\n", err)
 		os.Exit(1)
 	}
+	pluginLogger.SetLogLevel(log.DebugLevel)
 
-	pluginLogger.Info("Hello World plugin starting")
+	pluginLogger.Info("Hello World plugin starting up")
+
+	dir, err := os.Getwd()
+	if err != nil {
+		dir = "unknown"
+	}
+	pluginLogger.Debug("Process information",
+		"pid", os.Getpid(),
+		"ppid", os.Getppid(),
+		"uid", os.Getuid(),
+		"gid", os.Getgid(),
+		"dir", dir)
 
 	plugin := &HelloWorldPlugin{
 		logger: pluginLogger,
 	}
 
-	for {
-		pluginLogger.Debug("Waiting for message")
-		msgType, msg, err := gsplug.ReadMessage(os.Stdin)
-		if err != nil {
-			if err == io.EOF {
-				pluginLogger.Info("Received EOF, exiting")
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	errChan := make(chan error, 1)
+
+	pluginLogger.Debug("Checking IO streams",
+		"stdin", fmt.Sprintf("%T", os.Stdin),
+		"stdout", fmt.Sprintf("%T", os.Stdout),
+		"stderr", fmt.Sprintf("%T", os.Stderr))
+
+	go func() {
+		reader := bufio.NewReader(os.Stdin)
+		writer := bufio.NewWriter(os.Stdout)
+
+		pluginLogger.Debug("Created IO buffers",
+			"readerSize", reader.Size(),
+			"writerSize", writer.Size())
+
+		for {
+			pluginLogger.Debug("Waiting to read message type")
+			msgTypeByte := make([]byte, 1)
+			n, err := io.ReadFull(reader, msgTypeByte)
+			if err != nil {
+				if err == io.EOF {
+					pluginLogger.Info("Received EOF, exiting normally")
+					errChan <- nil
+					return
+				}
+				errChan <- fmt.Errorf("failed to read message type: %w", err)
 				return
 			}
-			pluginLogger.Error("Error reading message", "error", err)
-			continue
-		}
-		pluginLogger.Debug("Received message", "type", msgType, "content", fmt.Sprintf("%+v", msg))
+			pluginLogger.Debug("Read message type byte",
+				"bytesRead", n,
+				"messageType", msgTypeByte[0])
 
-		var response proto.Message
-		switch msgType {
-		case 1: // GetPluginInfo
-			response, err = plugin.GetPluginInfo(msg.(*pb.PluginInfoRequest))
-		case 2: // ExecuteCommand
-			response, err = plugin.ExecuteCommand(msg.(*pb.CommandRequest))
-		case 3: // GetMenu
-			response, err = plugin.GetMenu(msg.(*pb.MenuRequest))
-		default:
-			err = fmt.Errorf("unknown message type: %d", msgType)
-		}
+			pluginLogger.Debug("Reading message length")
+			var msgLen uint32
+			if err := binary.Read(reader, binary.LittleEndian, &msgLen); err != nil {
+				errChan <- fmt.Errorf("failed to read message length: %w", err)
+				return
+			}
+			pluginLogger.Debug("Read message length", "length", msgLen)
 
-		if err != nil {
-			pluginLogger.Error("Error handling message", "error", err)
-			continue
-		}
+			data := make([]byte, msgLen)
+			n, err = io.ReadFull(reader, data)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to read message data: %w", err)
+				return
+			}
+			pluginLogger.Debug("Read message data",
+				"bytesRead", n,
+				"dataLength", len(data),
+				"data", fmt.Sprintf("%x", data))
 
-		pluginLogger.Debug("Sending response", "type", msgType, "content", fmt.Sprintf("%+v", response))
-		err = gsplug.WriteMessage(os.Stdout, response)
-		if err != nil {
-			pluginLogger.Error("Error writing response", "error", err)
-		} else {
+			var response proto.Message
+			msgType := uint32(msgTypeByte[0])
+			switch msgType {
+			case 1:
+				pluginLogger.Debug("Handling GetPluginInfo request")
+				req := &pb.PluginInfoRequest{}
+				if err := proto.Unmarshal(data, req); err != nil {
+					errChan <- fmt.Errorf("failed to unmarshal GetPluginInfo request: %w", err)
+					return
+				}
+				response, err = plugin.GetPluginInfo(req)
+
+			case 2:
+				pluginLogger.Debug("Handling ExecuteCommand request")
+				req := &pb.CommandRequest{}
+				if err := proto.Unmarshal(data, req); err != nil {
+					errChan <- fmt.Errorf("failed to unmarshal ExecuteCommand request: %w", err)
+					return
+				}
+				response, err = plugin.ExecuteCommand(req)
+
+			case 3:
+				pluginLogger.Debug("Handling GetMenu request")
+				req := &pb.MenuRequest{}
+				if err := proto.Unmarshal(data, req); err != nil {
+					errChan <- fmt.Errorf("failed to unmarshal GetMenu request: %w", err)
+					return
+				}
+				response, err = plugin.GetMenu(req)
+
+			default:
+				errChan <- fmt.Errorf("unknown message type: %d", msgType)
+				return
+			}
+
+			if err != nil {
+				errChan <- fmt.Errorf("error handling message type %d: %w", msgType, err)
+				return
+			}
+
+			// Marshal and send response
+			pluginLogger.Debug("Marshaling response",
+				"type", fmt.Sprintf("%T", response))
+			responseData, err := proto.Marshal(response)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to marshal response: %w", err)
+				return
+			}
+
+			var writeMutex sync.Mutex
+			writeMutex.Lock()
+			defer writeMutex.Unlock()
+
+			pluginLogger.Debug("Writing response type", "type", msgType)
+			if _, err := writer.Write([]byte{byte(msgType)}); err != nil {
+				errChan <- fmt.Errorf("failed to write response type: %w", err)
+				return
+			}
+
+			pluginLogger.Debug("Writing response length", "length", len(responseData))
+			if err := binary.Write(writer, binary.LittleEndian, uint32(len(responseData))); err != nil {
+				errChan <- fmt.Errorf("failed to write response length: %w", err)
+				return
+			}
+
+			pluginLogger.Debug("Writing response data",
+				"dataLength", len(responseData),
+				"data", fmt.Sprintf("%x", responseData))
+			if _, err := writer.Write(responseData); err != nil {
+				errChan <- fmt.Errorf("failed to write response data: %w", err)
+				return
+			}
+
+			pluginLogger.Debug("Flushing writer")
+			if err := writer.Flush(); err != nil {
+				errChan <- fmt.Errorf("failed to flush writer: %w", err)
+				return
+			}
 			pluginLogger.Debug("Response sent successfully")
 		}
+	}()
 
-		// Flush stdout to ensure the message is sent immediately
-		os.Stdout.Sync()
+	select {
+	case err := <-errChan:
+		if err != nil {
+			pluginLogger.Error("Plugin error",
+				"error", err,
+				"errorType", fmt.Sprintf("%T", err))
+			os.Exit(1)
+		}
+		pluginLogger.Info("Plugin exiting normally")
+	case sig := <-sigChan:
+		pluginLogger.Info("Received signal, shutting down",
+			"signal", sig,
+			"signalType", fmt.Sprintf("%T", sig))
 	}
 }

@@ -3,6 +3,7 @@ module github.com/ssotops/gitspace-plugin-sdk/examples/hello-world
 go 1.23.1
 
 require (
+	github.com/charmbracelet/log v0.4.0
 	github.com/ssotops/gitspace-plugin-sdk v0.0.0-20241001023129-8c91f9f5d979
 	google.golang.org/protobuf v1.35.1
 )
@@ -10,7 +11,6 @@ require (
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/lipgloss v0.13.1 // indirect
-	github.com/charmbracelet/log v0.4.0 // indirect
 	github.com/charmbracelet/x/ansi v0.4.0 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect

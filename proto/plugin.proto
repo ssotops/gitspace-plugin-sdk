@@ -21,6 +21,7 @@ message CommandResponse {
     string result = 2;
     string error_message = 3;
     NavigationContext navigation = 4;
+    ProgressUpdate progress = 5;  // Add progress field
 }
 
 message MenuRequest {}
@@ -52,4 +53,12 @@ service PluginService {
     rpc GetPluginInfo(PluginInfoRequest) returns (PluginInfo) {}
     rpc ExecuteCommand(CommandRequest) returns (CommandResponse) {}
     rpc GetMenu(MenuRequest) returns (MenuResponse) {}
+}
+
+message ProgressUpdate {
+    string phase = 1;
+    string step = 2;
+    string status = 3;  // "running", "success", "error"
+    string message = 4;
+    string timestamp = 5;
 }
